@@ -5,6 +5,14 @@ import java.util.*;
 
 public class Main {
 
+    /*TODO
+        edgecases for round > 1
+        displaytable with cards
+        hand rank
+        problem with displayTable (preflop display)
+     */
+
+
     private static final int STARTING_MONEY = 1000;
     private static boolean bigBlind;
     private static final int BIG_BLIND = STARTING_MONEY / 100;
@@ -14,6 +22,16 @@ public class Main {
     private static int computerMoney = STARTING_MONEY;
     private static int playerBet;
     private static int computerBet;
+    private static int pot = 0;
+    private static boolean PCWin;
+
+    private static int stage;
+    /*
+    0 -> pre flop
+    1 -> flop
+    2 -> turn
+    3 -> river
+     */
 
     private static List<String> standardDeck = new ArrayList<>();
     private static List<String> currentDeck = new ArrayList<>();
@@ -36,7 +54,7 @@ public class Main {
         if (playerMoney <= 0) {
             System.out.println("Computer wins! Better luck next time.");
         } else {
-            System.out.println("Human wins! (for now)");
+            System.out.println("Humans win! (for now)");
         }
     }
 
@@ -64,7 +82,11 @@ public class Main {
             System.out.println("|");
         }
         System.out.format("+--------+--------+--------+--------+%n");
-        System.out.println("\n ");
+    }
+
+    private static void updateMoney() {
+        computerMoney -= computerBet;
+        playerMoney -= playerBet;
     }
 
     private static void playRound() {
@@ -75,9 +97,12 @@ public class Main {
         computerHand.clear();
         communityCards.clear();
 
+        System.out.println("\n ");
+
         // 1. Deal cards to player and computer
         dealCards(playerHand, 2);
         dealCards(computerHand, 2);
+        stage = 0;
 
         System.out.println("Your cards: " + playerHand);
 
@@ -86,46 +111,104 @@ public class Main {
             System.out.println("Computer is Big Blind");
             computerBet = BIG_BLIND;
             playerBet = SMALL_BLIND;
-            computerMoney -= BIG_BLIND;
-            playerMoney -= SMALL_BLIND;
         }
         else {
             System.out.println("You are Big Blind");
             computerBet = SMALL_BLIND;
             playerBet = BIG_BLIND;
-            computerMoney -= SMALL_BLIND;
-            playerMoney -= BIG_BLIND;
         }
-        int pot = SMALL_BLIND + BIG_BLIND;
-        displayTable(0);
 
-        // 4. Preflop
-        pot += bettingRound();
+        // 3. Preflop
+        if (!bettingRound()) {
+            endGame(true);
+        }
+        else {
+            pot += computerBet + playerBet;
+            computerBet = playerBet = 0;
+        }
+        displayTable();
 
-        // 3. Reveal community cards (flop, turn, river)
+        // 4. Reveal community cards (flop, turn, river)
+        // 4.1 Flop
+        stage++;
         dealCards(communityCards, 3); // Flop
         System.out.println("Flop: " + communityCards);
-        pot += bettingRound();
+        if (!bettingRound()){
+            endGame(true);
+        }
+        else {
+            pot += computerBet + playerBet;
 
+            computerBet = playerBet = 0;
+        }
+        displayTable();
+
+        // 4.2 turn
+        stage++;
         dealCards(communityCards, 1); // Turn
         System.out.println("Turn: " + communityCards);
-        pot += bettingRound();
+        if (!bettingRound()){
+            endGame(true);
+        }
+        else {
+            pot += computerBet + playerBet;
+            computerBet = playerBet = 0;
+        }
+        displayTable();
 
+        // 4.3 river
+        stage++;
         dealCards(communityCards, 1); // River
         System.out.println("River: " + communityCards);
 
-        // 4. Final betting round
-        pot += bettingRound();
+        if (!bettingRound()){
+            endGame(true);
+        }
+        else {
+            pot += computerBet + playerBet;
+            computerBet = playerBet = 0;
+        }
+        displayTable();
 
         // 5. Determine winner and award pot
-        if (determineWinner(playerHand, communityCards, computerHand)) {
-            System.out.println("You win the pot of $" + pot + "!");
-            playerMoney += pot;
-        } else {
-            System.out.println("Computer wins the pot of $" + pot + "!");
-            computerMoney += pot;
+        endGame(false);
+
+    }
+
+
+    private static void endGame (boolean fold) {
+
+        //winner through fold
+        if (fold) {
+            if (PCWin){
+                System.out.println("you folded");
+                computerWins();
+            }
+            else {
+                System.out.println("PC folded");
+                playerWins();
+            }
+        }
+        else if (determineWinner(playerHand, communityCards, computerHand)) {   //otherwise determine
+            if (PCWin){
+                computerWins();
+            }
+            else {
+                playerWins();
+            }
+        }
+        else {
+            System.out.println("the pot of $" + pot + " is split!");
+            bothWin();
         }
 
+        System.out.println("Computer had the following cards: ["+ computerHand.get(0) +"] ["+ computerHand.get(1) +"]");
+        //TODO show the winning hand eg Computer wins with pair of queens
+
+        //reset variables and switch the big blind
+        pot = 0;
+        computerBet = 0;
+        playerBet = 0;
         bigBlind = !bigBlind; //toggle
     }
 
@@ -164,45 +247,162 @@ public class Main {
         }
     }
 
-    private static int bettingRound() {
-        int pot = 0;
-        Scanner scanner = new Scanner(System.in);
-        while(playerBet < computerBet) {
-            //case for small blind, player has to call
-            System.out.println("Enter your bet (or 0 to check):");
-            int playerBet = scanner.nextInt();
-        }
-        int computerBet = pokerBrain.compute(playerBet, computerHand, communityCards);
-        System.out.println("Computer bets: $" + computerBet);
-        if (computerBet > playerBet) {
-            System.out.println("Do you want to match/raise the bet? (y/n)");
-            String response = scanner.next();
-            if (response.equalsIgnoreCase("y")) {
-                System.out.println("Enter your bet (minimum Bet to continue is "+ (computerBet-playerBet) +"):");
-                int playerBet = scanner.nextInt();
+    private static boolean responsePlayer(Scanner scanner){
+        //This method returns true if the player continues the game
+        System.out.println("Enter your bet (minimum Bet to continue is " + (Math.abs(computerBet - playerBet)) + "):"); //abs -> since it doesn't matter who is raising
+        System.out.println("Bets below the given minimum will be recognized as a fold");
 
-                if (playerBet > computerBet) { //player raises..in this case the computer should fold as it always bets the expected value/ theorems...exploitable will improve later
-                    System.out.println("You folded. You wins this round.");
-                    playerMoney += pot;
-                    return playerBet;
-                }
-                playerMoney -= computerBet;
-                computerMoney -= computerBet;
-                return 2 * computerBet;
-            } else {
-                System.out.println("You folded. Computer wins this round.");
-                computerMoney += playerBet;
-                return playerBet;
-            }
-        } else {
-            playerMoney -= playerBet;
-            computerMoney -= playerBet;
-            return 2 * playerBet;
+        int response = scanner.nextInt();
+        playerBet += response;
+        int raise = playerBet - computerBet;
+
+        if (raise < 0) {
+            System.out.println("You folded. Computer Wins.");
+            return false;
+        } else if (raise == 0) {
+            System.out.println("You call/check.");
+            return true;
+        }
+        else {
+            System.out.println("You raise.");
+            return true;
         }
     }
 
+    private static void playerWins () {
+        System.out.println("Player Wins");
+        playerMoney += pot + computerBet + playerBet;
+        computerMoney -= computerBet; //computer only looses his current bet.. as the money bet in the previous round already has been substracted
+    }
+
+    private static void computerWins () {
+        System.out.println("Computer Wins");
+        computerMoney += pot + computerBet + playerBet;
+        playerMoney -= playerBet;
+    }
+
+    private static void bothWin () {
+        System.out.println("Both Win");
+        int share = (pot + computerBet + playerBet)/2;
+        computerMoney += share;
+        playerMoney += share;
+    }
+
+    private static boolean bettingRound() {
+
+        try {
+            Scanner scanner = new Scanner(System.in);
+
+            //small blind starts betting --> the player with the least current bet starts
+            if (bigBlind) {
+                //Computer is big blind -> player starts
+                // continue till a common bet amount is agreed upon
+                if (stage == 0) {
+                    while (computerBet != playerBet) {
+                        if (responsePlayer(scanner)){
+                            computerBet += pokerBrain.compute(playerBet, computerHand, communityCards);
+                            if (computerBet < playerBet) {
+                                PCWin = false;
+                                return false;
+                            }
+                            //else computer has raised of called...either way the loop is run again
+                        }
+                        else {
+                            PCWin = true;
+                            return false;
+                        }
+                    }
+                }
+                else {
+                    //if it is not the preflop stage, the players will not start out with different bet amounts
+                    if (responsePlayer(scanner)){
+                        computerBet += pokerBrain.compute(playerBet, computerHand, communityCards);
+                        if (computerBet < playerBet) {
+                            PCWin = false;
+                            return false;
+                        }
+                        //else computer has raised of called...either way the loop is run
+                    }
+                    else {
+                        PCWin = true;
+                        return false;
+                    }
+                    while (computerBet != playerBet) {
+                        if (responsePlayer(scanner)){
+                            computerBet += pokerBrain.compute(playerBet, computerHand, communityCards);
+                            if (computerBet < playerBet) {
+                                PCWin = false;
+                                return false;
+                            }
+                            //else computer has raised of called...either way the loop is run again
+                        }
+                        else {
+                            PCWin = true;
+                            return false;
+                        }
+                    }
+                }
+            }
+            else {
+                //Player is big blind -> PC starts
+                // continue till a common bet amount is agreed upon
+                if (stage == 0) {
+                    while (computerBet != playerBet) {
+                        computerBet += pokerBrain.compute(playerBet, computerHand, communityCards);
+                        if (computerBet >= playerBet){
+                            if (!responsePlayer(scanner)) {
+                                PCWin = true;
+                                return false;
+                            }
+                            //else player has raised or called...either way the loop is run again
+                        }
+                        else {
+                            PCWin = false;
+                            return false;
+                        }
+                    }
+                }
+                else {
+                    //if it is not the preflop stage, the players will not start out with different bet amounts
+                    computerBet += pokerBrain.compute(playerBet, computerHand, communityCards);
+                    if (computerBet >= playerBet){
+                        if (!responsePlayer(scanner)) {
+                            PCWin = true;
+                            return false;
+                        }
+                        //else computer has raised of called...either way the loop is run
+                    }
+                    else {
+                        PCWin = false;
+                        return false;
+                    }
+                    while (computerBet != playerBet) {
+                        computerBet += pokerBrain.compute(playerBet, computerHand, communityCards);
+                        if (computerBet >= 0){
+                            if (!responsePlayer(scanner)) {
+                                PCWin = true;
+                                return false;
+                            }
+                            //else player has raised or called...either way the loop is run again
+                        }
+                        else {
+                            PCWin = false;
+                            return false;
+                        }
+                    }
+                }
+            }
+            return true;
+        }
+        finally {
+            updateMoney();
+        }
+
+
+    }
+
     //just a bit cosmetics..irrelevant
-    private static void displayTable(int pot) {
+    private static void displayTable() {
         if (bigBlind){
             System.out.println("        +------------BB-------------+               Protocol:");
         }
@@ -240,16 +440,16 @@ public class Main {
         int playerRank = evaluateHand(allPlayerCards);
         int computerRank = evaluateHand(allComputerCards);
 
-        if (playerRank < computerRank) {
+        if (playerRank != computerRank) {
+            if (playerRank < computerRank) {
+                PCWin = true;
+            } else {
+                PCWin = false;
+            }
             return true;
-        } else if (playerRank > computerRank) {
+        }
+        else { //case same card strength -> pot is split
             return false;
-        } else {
-            // If both players have the same rank, we need to evaluate further
-            // For simplicity, we'll just compare the highest card for now.
-            String highestPlayerCard = Collections.max(allPlayerCards);
-            String highestComputerCard = Collections.max(allComputerCards);
-            return highestPlayerCard.compareTo(highestComputerCard) > 0;
         }
     }
 
