@@ -12,7 +12,6 @@ public class Main {
         problem with displayTable (preflop display)
      */
 
-
     private static final int STARTING_MONEY = 1000;
     private static boolean bigBlind;
     private static final int BIG_BLIND = STARTING_MONEY / 100;
